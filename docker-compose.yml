@@ -1,0 +1,26 @@
+# Phase 1 RAG — base Postgres avec l'extension pgvector deja incluse.
+# Image officielle pgvector = Postgres + extension "vector" compilee.
+# Lancer :  docker compose up -d
+# Arreter :  docker compose down        (les donnees restent dans le volume)
+# Reset total : docker compose down -v   (supprime le volume = repart de zero)
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    container_name: ohada-pgvector
+    environment:
+      POSTGRES_USER: ohada
+      POSTGRES_PASSWORD: ohada
+      POSTGRES_DB: ohada_rag
+    ports:
+      - "5432:5432"          # hote:conteneur — l'app se connecte sur localhost:5432
+    volumes:
+      - pgdata:/var/lib/postgresql/data   # persistance hors du conteneur
+    healthcheck:             # Spring attend que la base soit prete avant de se connecter
+      test: ["CMD-SHELL", "pg_isready -U ohada -d ohada_rag"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:

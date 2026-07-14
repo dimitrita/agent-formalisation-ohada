@@ -44,8 +44,17 @@ Objectif : retrouver les bons **articles OHADA** pour sourcer chaque affirmation
 - 💡 **Metadata homogènes sur tous les chunks** : mêmes clés partout → filtrage et citation fiables.
   Clés incohérentes = 1re cause de RAG cassé en prod.
 
-**Reste pour finir la Phase 1** : ingérer les vrais PDF OHADA → découper **par article** (chunking) →
-ajouter un **reranking** (reclasser les chunks, pas juste top-k) → **guardrail** de citation obligatoire.
+### Tranche 2 — corpus PDF (en cours)
+
+- 🏗️ Téléchargé les 2 PDF officiels dans `corpus/ohada_core/` : **AUSCGIE 2014** (sociétés, 6 Mo) +
+  **AUDCG 2010** (droit commercial, statut entreprenant / RCCM, 67 p).
+- 💡 On prend les versions **révisées** (2014 / 2010), pas les originales : c'est la version en vigueur,
+  et l'AUDCG 2010 contient le « statut d'entreprenant » cité dans la spec.
+- 💡 PDF **non versionnés** dans git (`.gitignore`) → à la place un manifest `corpus/ohada_core/SOURCES.md`
+  (URLs + commandes) = corpus reproductible sans alourdir le dépôt public.
+
+**Reste pour finir la Phase 1** : parser les PDF → découper **par article** (chunking) → embeddings +
+stockage (pipeline déjà prêt) → puis **reranking** + **guardrail** de citation obligatoire.
 
 ---
 

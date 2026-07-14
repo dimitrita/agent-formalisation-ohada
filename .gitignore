@@ -1,5 +1,8 @@
 HELP.md
 target/
+
+### Corpus RAG : PDF sources non versionnes (reproductibles via corpus/**/SOURCES.md) ###
+corpus/**/*.pdf
 .mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/

@@ -54,6 +54,18 @@ prototype d'un travail de niveau entreprise :
   → privilégier la clarté sur l'astuce ; commenter les parties non évidentes ; éviter la magie implicite.
 - Avant un nouveau module : rappeler où on en est, ce qu'on va faire, pourquoi.
 
+## Journal de déroulement (IMPÉRATIF)
+
+Tenir à jour le fichier `DEROULEMENT.md` (racine projet) **à chaque tranche de travail**.
+C'est un mémo pour l'utilisateur : relire plus tard ce qui a été construit, dans quel ordre,
+qui a fait quoi, et pourquoi.
+
+- Y consigner : 🏗️ les socles/plomberie faits par Claude, ✋ les petites actions/décisions faites
+  par l'utilisateur, 💡 les choix + leur raison.
+- **Synthétique** : pas de détail excessif, juste de quoi recharger le contexte et comprendre.
+- Mettre à jour au fil de l'eau (fin de tranche / choix structurant / test validé), pas seulement
+  en fin de phase.
+
 ## Notes
 
 - RTK (voir CLAUDE.md global) : préfixer les commandes shell par `rtk` quand un filtre existe.

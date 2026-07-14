@@ -96,11 +96,8 @@ Objectif : retrouver les bons **articles OHADA** pour sourcer chaque affirmation
 
 ---
 
-## Concepts clés (mémo « comment marche un agent »)
+## Concepts clés & apprentissages
 
-- **Embedding** : transformer un texte en vecteur de nombres. Deux textes proches de sens → vecteurs
-  proches. C'est ce qui permet la recherche « par le sens » et pas par mots-clés.
-- **Vector store** : base qui stocke ces vecteurs et sait retrouver les plus proches d'une question.
-- **RAG** (Retrieval-Augmented Generation) : on récupère d'abord les bons passages (retrieval), puis
-  le LLM répond **en s'appuyant dessus** → réponses sourcées, moins d'hallucinations.
-- **Citation / `ref`** : chaque passage porte sa source ; l'agent doit citer → traçabilité juridique.
+➡️ Déplacés dans **`APPRENTISSAGES.md`** (savoir transverse durable, relisable à froid).
+Ce journal reste chronologique ; les leçons de fond (embedding, chunking, idempotence, metadata,
+archi corpus) vivent là-bas.

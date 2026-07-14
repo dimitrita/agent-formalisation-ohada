@@ -112,8 +112,18 @@ Objectif : retrouver les bons **articles OHADA** pour sourcer chaque affirmation
   ⚠️ Limite : le rerank réordonne seulement le top-N retrieved → il soigne la **précision**, pas le **recall**
   (si l'article idéal n'est pas dans les 20 candidats, il reste absent). Leviers futurs : top-N ↑, nettoyage chunk.
 
-**Reste pour finir la Phase 1** : **guardrail** de citation obligatoire (anti-hallucination). Pistes bonus :
-nettoyage des chunks (résidus PDF : en-têtes/pieds de page), montée du top-N.
+**Reste pour finir la Phase 1** (ordre décidé) :
+1. **Tranche 5 — modèles multilingues** : remplacer les modèles anglophones (`all-MiniLM` embeddings,
+   `ms-marco-MiniLM` rerank) par du multilingue orienté FR (`bge-m3` / `e5`, `bge-reranker-v2-m3`).
+   ⚠️ Changer l'embedding ⇒ changer `dimensions` + **ré-embedder tout le corpus**.
+2. **Tranche 6 — recherche hybride (dense + BM25) fusionnée par RRF** : rattraper les termes exacts
+   ("SARL", "art. 311", "RCCM") que le vectoriel rate.
+3. **Tranche 7 — guardrail** de citation obligatoire (anti-hallucination).
+- Plus tard / bonus : nettoyage des chunks (résidus PDF), contextual retrieval, montée top-N.
+
+> 💡 **Pourquoi 5 et 6 AVANT le guardrail** : ils améliorent le **recall** (faire apparaître le bon
+> article). Le rerank et le top-N ne font que *réordonner* l'existant. Détail des leviers :
+> `APPRENTISSAGES.md` §8. Chaque levier à mesurer sur un golden set (recall@k avant/après).
 
 ---
 

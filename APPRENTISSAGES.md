@@ -119,6 +119,71 @@ chiffres d'éval.**
 
 ---
 
+## 7. Évaluer le RAG (mesurer, pas deviner)
+
+Comment savoir que le RAG répond juste **sans confier ça à un LLM à chaque fois** : un **golden set**
+(jeu question → `ref` attendue) écrit **une fois par un humain**, puis rejoué en **déterministe**.
+Séparer **retrieval** (recall@k, MRR — zéro LLM) et **génération** (linters déterministes + LLM-judge
+optionnel).
+
+➡️ Détail complet dans **`EVALUATION-RAG.md`**.
+
+---
+
+## 8. Reranking, et quoi faire quand il ne suffit pas
+
+### Ce qu'est (et n'est pas) le reranking
+
+- **Retrieval vectoriel** = rappel large mais grossier : compare des **proximités de sens de surface**
+  (un bi-encoder a pré-calculé 1 vecteur par chunk, on cherche les plus proches). Rapide, mais rate
+  l'**intention** et les **termes exacts**.
+- **Reranking** = un **cross-encoder** relit chaque paire **(question, chunk) ensemble** et sort **1 score
+  de pertinence**. Bien plus fin, mais lent (pas de vecteur pré-calculé) → on ne l'applique qu'à un
+  petit lot. D'où le schéma **retrieve top-N (large) → rerank → garder top-K**.
+- Scores du cross-encoder = **logits** (échelle libre, souvent négatifs) : servent à **ordonner**, pas
+  une probabilité.
+
+### ⚠️ La règle qui explique 90 % des échecs
+
+**Le rerank ne peut réordonner que ce que le retrieval a déjà remonté.** Si le bon article n'est pas
+dans le top-N, le rerank ne peut pas l'inventer. Donc un mauvais résultat est presque toujours un
+problème de **recall** (retrieval) ou de **qualité de chunk**, **pas** de tri.
+→ Corollaire : **augmenter N est le levier le plus grossier** (plus de N = plus de bruit à trier, coût
+rerank ↑). Rarement la meilleure réponse.
+
+### Cas réel rencontré
+
+"obligations comptables du commerçant" : la baseline mettait **AUSCGIE 697 (*commissaire aux comptes*)**
+en #1 — piège lexical *comptes ≈ comptables*. Le cross-encoder l'a rétrogradé **#1 → #3** et remonté un
+article **AUDCG commerçant**. ✅ Gain de **précision** clair. Mais le cœur idéal (AUDCG art. 13, tenue de
+comptabilité) restait absent → **plafond de recall** : il n'était pas dans les 20 candidats.
+
+### Leviers fiables quand le rerank ne suffit pas (par ROI décroissant)
+
+1. **Modèles multilingues** (souvent le plus gros gain). Nos 2 modèles sont **anglophones**
+   (`all-MiniLM` embeddings + `ms-marco-MiniLM` rerank) → sous-optimaux sur du **droit français**.
+   Cibles : embeddings `bge-m3` / `multilingual-e5-large`, rerank `bge-reranker-v2-m3`.
+2. **Recherche hybride dense + lexical, fusionnée par RRF.** Le vectoriel rate les **termes exacts**
+   ("SARL", "art. 311", "RCCM") ; **BM25** (lexical) les attrape. On lance les deux et on fusionne les
+   rangs (**Reciprocal Rank Fusion**). Standard industrie, très fiable.
+3. **Nettoyage + enrichissement des chunks.** Résidus PDF (en-têtes, `page 7/67`, OCR) **polluent
+   l'embedding**. Bonus : **contextual retrieval** = préfixer chaque chunk de son titre/section.
+4. **Pré-filtrage par metadata.** Question « commerçant » → filtrer `source=AUDCG` avant de chercher.
+   Coupe les **fuites cross-doc**. Fiable dès qu'on sait router la question.
+5. **Réécriture / expansion de requête (LLM).** *Multi-query* (N reformulations fusionnées) ou **HyDE**
+   (embed une réponse hypothétique générée, plus proche d'un article de loi qu'une question courte).
+   Puissant mais ajoute latence + coût LLM.
+
+**Ordre d'attaque rationnel** : (1) multilingue → (2) hybride RRF → (3) chunks. Ce sont des gains de
+**recall/qualité** (ils font *apparaître* le bon doc). Rerank et top-N ne font que *réordonner* l'existant.
+
+### Le fil rouge : sans éval, on optimise à l'aveugle
+
+Chaque levier se juge sur un **golden set** (question → `ref` attendue), en mesurant `recall@k` **avant/
+après**. Sinon on « améliore » au feeling. Cf section 7 + `EVALUATION-RAG.md`.
+
+---
+
 ## Mémo « comment marche un agent » (rappels de base)
 
 - **Embedding** : texte → vecteur ; sens proche → vecteurs proches → recherche « par le sens ».

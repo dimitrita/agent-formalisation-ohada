@@ -91,8 +91,29 @@ Objectif : retrouver les bons **articles OHADA** pour sourcer chaque affirmation
   change. (Alternative possible : id de `Document` **déterministe** = hash(source+numéro) → upsert au lieu de
   delete+insert.)
 
-**Reste pour finir la Phase 1** : ingérer **AUDCG 2010** → tester `GET /rag/search?q=` (vérifier les `ref`)
-→ puis **reranking** + **guardrail** de citation obligatoire.
+### Tranche 4 — reranking (cross-encoder local) ✅
+
+- 🏗️ Ingestion **AUDCG 2010** (`POST /rag/ingest/audcg`) → 307 articles. Corpus `ohada_core` = 1213 chunks.
+- ✋ J'ai testé `GET /rag/search` (baseline, sans rerank) sur 3 vraies questions. Constat : top-1 **faux 2 fois
+  sur 3** (capital "SARL" → renvoie art. SA ; "obligations comptables" → renvoie *commissaire aux comptes*),
+  fuites cross-doc, bruit en #2/#3. → prouve le besoin de reranking.
+- 💡 **Reranker = cross-encoder local ONNX** (`cross-encoder/ms-marco-MiniLM-L-6-v2` via LangChain4j
+  `OnnxScoringModel`). Choix cohérent avec les embeddings locaux : zéro clé, zéro réseau. Couche **distincte**
+  du vector store (Spring AI reste sur l'embedding/retrieval) — usage légitime de LangChain4j sur SA propre couche.
+- 🏗️ Dépendance `dev.langchain4j:langchain4j-onnx-scoring` + bean `ScoringModel` (`RerankConfig`, **@Lazy** :
+  l'app démarre même sans le modèle sur disque).
+- 🏗️ Endpoint `GET /rag/search-rerank` : **retrieve LARGE (top-N=20)** → cross-encoder re-note chaque paire
+  (question, chunk) → **garde top-K=3**. Renvoie `score_rerank` ET `score_vectoriel` (comparaison visible).
+- ✋ J'ai écrit le cœur du rerank (map→score→sort desc→limit topK) puis demandé à Claude de finir.
+- 💡 Modèle **non versionné** (fichiers lourds) → manifest `models/reranker/SOURCES.md` (téléchargement HF)
+  + `.gitignore` (`models/**/*.onnx`, `tokenizer.json`). Même logique que les PDF.
+- 💡 **Résultat mesuré** : sur "obligations comptables du commerçant", le piège *commissaire aux comptes*
+  (AUSCGIE 697) passe de **#1 → #3**, remplacé par un article AUDCG commerçant. Précision nettement meilleure.
+  ⚠️ Limite : le rerank réordonne seulement le top-N retrieved → il soigne la **précision**, pas le **recall**
+  (si l'article idéal n'est pas dans les 20 candidats, il reste absent). Leviers futurs : top-N ↑, nettoyage chunk.
+
+**Reste pour finir la Phase 1** : **guardrail** de citation obligatoire (anti-hallucination). Pistes bonus :
+nettoyage des chunks (résidus PDF : en-têtes/pieds de page), montée du top-N.
 
 ---
 

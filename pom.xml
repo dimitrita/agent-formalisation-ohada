@@ -69,6 +69,15 @@
 			<artifactId>spring-ai-pdf-document-reader</artifactId>
 		</dependency>
 
+		<!-- Phase 1 RAG : RERANKING local (cross-encoder ONNX, in-process).
+		     LangChain4j fournit OnnxScoringModel : score(question, chunk) -> pertinence fine.
+		     Local comme les embeddings : zero cle, zero reseau. Couche distincte du vector store. -->
+		<dependency>
+			<groupId>dev.langchain4j</groupId>
+			<artifactId>langchain4j-onnx-scoring</artifactId>
+			<version>1.11.8-beta19</version>
+		</dependency>
+
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-webmvc-test</artifactId>

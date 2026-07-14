@@ -3,6 +3,10 @@ target/
 
 ### Corpus RAG : PDF sources non versionnes (reproductibles via corpus/**/SOURCES.md) ###
 corpus/**/*.pdf
+
+### Modeles ML lourds non versionnes (reproductibles via models/**/SOURCES.md) ###
+models/**/*.onnx
+models/**/tokenizer.json
 .mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/

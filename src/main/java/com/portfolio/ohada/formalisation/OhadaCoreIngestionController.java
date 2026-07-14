@@ -46,6 +46,9 @@ public class OhadaCoreIngestionController {
     // Chemin du PDF AUSCGIE (partage par l'ingestion et le diagnostic).
     private static final String AUSCGIE_PDF = "corpus/ohada_core/AUSCGIE-2014.pdf";
 
+    // Chemin du PDF AUDCG (droit commercial general : statut d'entreprenant, RCCM).
+    private static final String AUDCG_PDF = "corpus/ohada_core/AUDCG-2010.pdf";
+
     // Motif de detection d'un debut d'article OHADA. Partage (DRY) entre decoupe et diagnostic.
     //   (?i) casse ignoree, (?m) ^ = debut de ligne, (?:article|art\.) le mot ou l'abreviation,
     //   \s+(\d+) le numero capture en groupe 1.
@@ -97,6 +100,12 @@ public class OhadaCoreIngestionController {
     @PostMapping("/ingest/auscgie")
     public String ingestAuscgie() {
         return ingest(AUSCGIE_PDF, "AUSCGIE", "2014-01-30", "https://www.ohada.org/auscgie");
+    }
+
+    /** POST /rag/ingest/audcg : lit le PDF AUDCG, decoupe par article, stocke. */
+    @PostMapping("/ingest/audcg")
+    public String ingestAudcg() {
+        return ingest(AUDCG_PDF, "AUDCG", "2010-12-15", "https://www.ohada.org/audcg");
     }
 
     /**

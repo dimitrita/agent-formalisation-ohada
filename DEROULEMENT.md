@@ -61,8 +61,38 @@ Objectif : retrouver les bons **articles OHADA** pour sourcer chaque affirmation
 - 🏗️ `corpus/cm_procedures/cm_creation_entreprise.md` : formalités CFCE (étapes/délais/coûts/pièces),
   source officielle minfi.gov.cm + manifest `SOURCES.md`.
 
-**Reste pour finir la Phase 1** : parser les PDF → découper **par article** (chunking) → embeddings +
-stockage (pipeline déjà prêt) → puis **reranking** + **guardrail** de citation obligatoire.
+### Tranche 3 — chunking par article + comptage en base ✅
+
+- 🏗️ Dépendance Maven `spring-ai-pdf-document-reader` (lecture PDF via PDFBox).
+- 🏗️ `OhadaCoreIngestionController` : pipeline `PDF → texte → découpe PAR ARTICLE → Document(+metadata) → vector store`.
+  - `POST /rag/ingest/auscgie` : ingère l'AUSCGIE.
+  - `GET /rag/ingest/auscgie/diagnostic` : **analyseur du PDF brut** (relit le PDF, ne touche PAS la base) —
+    a servi à prouver le bug de sur-découpage.
+- 💡 **Bug trouvé** : le regex `^(article|art.) \d+` trouve **1112 débuts** alors que l'AUSCGIE s'arrête
+  à l'**art. 920** (le PDF répète des blocs → 83 numéros en double). `chunks_courts:0` → pas des lignes de
+  sommaire courtes, mais de vrais blocs répétés.
+- 💡 **Fix = déduplication par numéro d'article**, on garde le **chunk le plus long** (le vrai texte de loi
+  bat un bloc répété plus court). Résultat : **906 articles** ingérés (`POST` le confirme).
+  Pourquoi ça compte : 1 numéro = 1 `ref` unique = citation fiable (doublons = 1re cause de RAG cassé).
+- ✋ J'ai écrit le cœur de la dédup (garder le plus long) puis, plus tard, demandé à Claude de finir.
+- 🏗️ Comptage **en base** (preuve de stockage réel, ≠ diagnostic PDF) via `JdbcTemplate` (le `VectorStore`
+  Spring AI n'expose pas de `count`) :
+  - `GET /rag/count-db` : nb de chunks **par source**, `GROUP BY metadata->>'source'` → **auto-découvert**
+    (chaque nouveau PDF ingéré apparaît sans code en plus) + `total`.
+  - `GET /rag/count-db/{source}` : nb pour une source, requête **paramétrée `?`** (anti-injection SQL).
+- 💡 Table pgvector : nom **par défaut** = `vector_store`, mais ici configuré à **`ohada_core`**
+  (`application.properties`). Le comptage lit ce nom via `@Value` (source unique de vérité, pas de nom en dur).
+  Metadata = colonne `jsonb`. Vérifié via context7 avant de coder.
+- 💡 **⚠️ Idempotence de l'ingestion (leçon RAG importante)** : `vectorStore.add()` = **INSERT** (UUID
+  aléatoire par chunk). Ré-ingérer le **même PDF** ⇒ **doublons** en base (2 runs = 1812 lignes au lieu de 906).
+  Un RAG a **besoin d'une stratégie anti-doublon** dès qu'un document peut être ré-ingéré (redéploiement,
+  correction, mise à jour de source). Choix retenu : ingest **idempotent** = `DELETE WHERE source=?` **avant**
+  le `add` ⇒ « ré-ingérer = **remplacer**, pas empiler ». Bonus : purge aussi les articles disparus si le PDF
+  change. (Alternative possible : id de `Document` **déterministe** = hash(source+numéro) → upsert au lieu de
+  delete+insert.)
+
+**Reste pour finir la Phase 1** : ingérer **AUDCG 2010** → tester `GET /rag/search?q=` (vérifier les `ref`)
+→ puis **reranking** + **guardrail** de citation obligatoire.
 
 ---
 

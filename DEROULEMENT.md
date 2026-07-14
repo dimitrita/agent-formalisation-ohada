@@ -53,6 +53,14 @@ Objectif : retrouver les bons **articles OHADA** pour sourcer chaque affirmation
 - 💡 PDF **non versionnés** dans git (`.gitignore`) → à la place un manifest `corpus/ohada_core/SOURCES.md`
   (URLs + commandes) = corpus reproductible sans alourdir le dépôt public.
 
+- ✋ J'ai demandé d'ajouter un doc **Cameroun**.
+- 💡 Cameroun = **plugin pays** → nouvelle collection `cm_procedures` (metadata `pays=CM`), PAS dans
+  `ohada_core`. Rappel archi : `ohada_core` = transverse (droit OHADA commun aux 17 pays) ;
+  les **démarches** (guichet, coûts, délais) sont spécifiques pays. Ajouter un pays = ajouter une
+  collection procédures sans toucher au reste (cf spec §V2). pgvector = simple **extension** de Postgres.
+- 🏗️ `corpus/cm_procedures/cm_creation_entreprise.md` : formalités CFCE (étapes/délais/coûts/pièces),
+  source officielle minfi.gov.cm + manifest `SOURCES.md`.
+
 **Reste pour finir la Phase 1** : parser les PDF → découper **par article** (chunking) → embeddings +
 stockage (pipeline déjà prêt) → puis **reranking** + **guardrail** de citation obligatoire.
 

@@ -129,6 +129,6 @@ Objectif : retrouver les bons **articles OHADA** pour sourcer chaque affirmation
 
 ## Concepts clés & apprentissages
 
-➡️ Déplacés dans **`APPRENTISSAGES.md`** (savoir transverse durable, relisable à froid).
+➡️ Déplacés dans **`apprentissage/APPRENTISSAGES.md`** (savoir transverse durable, relisable à froid).
 Ce journal reste chronologique ; les leçons de fond (embedding, chunking, idempotence, metadata,
 archi corpus) vivent là-bas.

@@ -195,9 +195,18 @@ comptabilité) restait absent → **plafond de recall** : il n'était pas dans l
    ⚠️ Pièges rencontrés : (a) ONNX à **poids externes** (`model.onnx_data`) introuvable car résolu par
    rapport au CWD → prendre une variante **single-file < 2 Go** (`model_quantized.onnx` int8) ;
    (b) **pooling** BGE = CLS mais défaut Spring AI = mean (fonctionnel, à raffiner si besoin, cf §1).
-2. **Recherche hybride dense + lexical, fusionnée par RRF.** Le vectoriel rate les **termes exacts**
-   ("SARL", "art. 311", "RCCM") ; **BM25** (lexical) les attrape. On lance les deux et on fusionne les
-   rangs (**Reciprocal Rank Fusion**). Standard industrie, très fiable.
+2. **Recherche hybride dense + lexical, fusionnée par RRF. ✅ FAIT (Tranche 6).** Le vectoriel rate les
+   **termes exacts** ; le **lexical** (full-text Postgres `french`, "BM25-like") les attrape. On lance
+   les deux et on fusionne les **rangs** par **RRF** (`score(id) = Σ 1/(60+rang)`, on ignore les scores
+   car cosinus et ts_rank sont incomparables). Endpoint `/rag/search-hybrid`.
+   **Gain mesuré** : Q3 « entreprenant » → l'`art. 30` (définition exacte, **absent** du top-3 en dense
+   seul) est **récupéré** grâce au lexical.
+   ⚠️ **La FRONTIÈRE du lexical (leçon Q1)** : le lexical ne matche que le **mot littéral présent** dans
+   le texte. « SARL » apparaît **0 fois** dans le corpus (la loi écrit « société à responsabilité
+   limitée ») → le lexical ne peut pas le rattraper, et comme `plainto_tsquery` combine en **ET**, un
+   seul mot absent (`sarl`) vide la requête → l'hybride retombe sur le dense. **L'hybride rattrape les
+   termes exacts _présents_, il n'invente pas un mot absent.** Leviers alors : **expansion de requête**
+   (sigle → forme longue), sémantique **OR** (`websearch_to_tsquery`), ou **abstention** (§ guardrail).
 3. **Nettoyage + enrichissement des chunks.** Résidus PDF (en-têtes, `page 7/67`, OCR) **polluent
    l'embedding**. Bonus : **contextual retrieval** = préfixer chaque chunk de son titre/section.
 4. **Pré-filtrage par metadata.** Question « commerçant » → filtrer `source=AUDCG` avant de chercher.

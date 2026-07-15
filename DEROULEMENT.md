@@ -145,12 +145,55 @@ Objectif : retrouver les bons **articles OHADA** pour sourcer chaque affirmation
   <0 ≈ non pertinent`. Un **seuil à ~0 sur le score rerank** = mécanisme d'abstention → motive
   concrètement le **guardrail Tranche 7** (chiffres réels, pas théorie).
 
+### Tranche 6 — recherche hybride (dense + lexical, fusion RRF) ✅
+
+**L'idée en une phrase** : jusqu'ici on cherchait seulement « par le sens » (bge-m3). On ajoute une 2e
+recherche « par le mot exact » (comme un Ctrl+F malin), et on **marie** les deux classements. But :
+rattraper les termes précis (« SARL », « art. 311 », « RCCM ») que le sens seul dilue et rate.
+
+- 💡 **Deux moteurs complémentaires.** Dense (bge-m3) = « même **idée** » (paraphrases, synonymes).
+  Lexical = « même **mot** » (sigles, numéros d'article). La loi est pleine de termes exacts non
+  négociables → il faut les deux.
+- 💡 **Moteur lexical = full-text Postgres natif en `french`** (pas d'extension à installer). Postgres
+  transforme chaque texte en liste de mots-racines (« comptables », « comptable » → même racine `compt`)
+  et compare à la question. C'est du « BM25-like » : suffisant pour ~1213 articles. (Vrai BM25 = extension
+  ParadeDB, gardée en réserve si l'éval le réclame.)
+- 💡 **Fusion = RRF (Reciprocal Rank Fusion).** Les 2 moteurs donnent des scores **incomparables**
+  (cosinus ∈ [0,1] vs ts_rank échelle libre). RRF ignore les scores, ne regarde que la **place** (rang) :
+  chaque article gagne `1/(60+rang)` dans chaque liste, on additionne. Un article **bien placé dans les
+  deux** remonte → c'est le but. (Analogie : 2 jurys aux barèmes différents → on compare les classements,
+  pas les notes.)
+- 🏗️ Nouveau `HybridSearchController` (`GET /rag/search-hybrid`) : dense top-N + lexical top-N → RRF →
+  rerank (bge-reranker-base, réutilisé) → top-K. On **garde** `/search-rerank` (T5) pour comparer.
+- 🏗️ Index full-text créé par nous au boot (`@PostConstruct`, `CREATE INDEX IF NOT EXISTS ... USING GIN
+  (to_tsvector('french', content))`) — Spring AI ne crée que l'index vectoriel. Idempotent.
+- ✋ **J'ai écrit le cœur = la formule RRF** (`rrf.merge(id, 1.0/(RRF_K+rang), Double::sum)`). Le `merge`
+  avec `Double::sum` = ce qui fait **cumuler** un article présent dans les 2 listes.
+- 💡 **Résultat mesuré (golden set), honnête :**
+  - **Q3 « statut d'entreprenant » ✅ GAIN** : en T5, l'`art. 30` (la définition exacte) était **absent**
+    du top-3 (on avait 29/31/32). En T6, la recherche « par le mot » le fait remonter → **art. 30 entre
+    dans le top-3**. Preuve concrète que l'hybride ajoute du **recall**.
+  - **Q2 « obligations comptables » ✅ stable** : top-3 = AUDCG 12/13/16, correct (inchangé, pas cassé).
+  - **Q1 « capital minimum SARL » ➖ inchangé** (824/61/66, scores négatifs) — voir ci-dessous.
+- 💡 **Découverte Q1 (vérifiée en base) — la FRONTIÈRE du lexical** :
+  - `SELECT count(*) ... WHERE content ILIKE '%SARL%'` = **0**. Le sigle « SARL » **n'existe nulle part**
+    dans le corpus : la loi écrit « société à responsabilité limitée » en toutes lettres. → le lexical ne
+    peut PAS matcher un mot que le texte ne contient jamais.
+  - `plainto_tsquery` combine les mots en **ET** : « capital & minimum & sarl ». Comme `sarl` matche 0
+    ligne, la requête lexicale renvoie **vide** → l'hybride retombe sur le dense seul → **identique à T5**.
+  - Bonus : l'`art. 311` réel parle de **parts sociales**, pas de capital minimum. La révision 2014 a
+    supprimé le minimum SARL → **la bonne réponse n'existe pas** → c'est un cas d'**abstention** (T7),
+    pas de retrieval.
+  - **Leçon** : l'hybride n'est pas magique. Il rattrape les termes exacts **présents** (Q3). Il ne crée
+    pas un mot absent (Q1). Leviers pour Q1 : **expansion de requête** (SARL → « société à responsabilité
+    limitée »), sémantique **OR** (`websearch_to_tsquery`), et surtout **abstention (T7)**.
+
 **Reste pour finir la Phase 1** (ordre décidé) :
-1. **Tranche 6 — recherche hybride (dense + BM25) fusionnée par RRF** : rattraper les termes exacts
-   ("SARL", "art. 311", "RCCM") que le vectoriel rate. (Q1 art. 311 non récupéré = cas d'école.)
-2. **Tranche 7 — guardrail** citation obligatoire + **abstention** sur seuil rerank (anti-hallucination).
-- Plus tard / bonus : nettoyage des chunks (**boundary bleed** repéré : en-têtes de section collés aux
-  chunks, ex. art.12/art.29), contextual retrieval, montée top-N, upgrade rerank v2-m3.
+1. **Tranche 7 — guardrail** citation obligatoire + **abstention** sur seuil rerank (`score < 0` = « je ne
+   sais pas », cf T5) — anti-hallucination. Q1 = le cas d'usage type.
+- Plus tard / bonus : **expansion de requête** (sigles → forme longue) pour Q1 ; nettoyage des chunks
+  (**boundary bleed** : en-têtes de section collés, ex. art.12/art.29) ; contextual retrieval ; montée
+  top-N ; upgrade rerank v2-m3.
 
 > 💡 **Pourquoi 5 et 6 AVANT le guardrail** : ils améliorent le **recall** (faire apparaître le bon
 > article). Le rerank et le top-N ne font que *réordonner* l'existant. Détail des leviers :

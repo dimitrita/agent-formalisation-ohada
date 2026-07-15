@@ -57,6 +57,33 @@ all-MiniLM est **multilingue moyen**, entraîné surtout sur de l'anglais géné
 un modèle orienté français/multilingue (`bge-m3`, ou embeddings OpenAI). **Décision guidée par les
 chiffres d'éval.**
 
+### Pooling `CLS` vs `mean` — comment un modèle résume une phrase en 1 vecteur
+
+Un modèle d'embedding ne traite pas la phrase d'un bloc : il la découpe en **tokens** (bouts de mots)
+et calcule **un vecteur par token**. Mais on veut **un seul** vecteur pour toute la phrase. Il faut
+donc **agréger** (« pooling ») ces vecteurs-tokens en un. Deux méthodes dominantes :
+
+- **mean pooling** : moyenne de tous les vecteurs-tokens. *(La moyenne des notes de la classe.)*
+  Utilisé par **all-MiniLM** et la famille **e5**.
+- **CLS pooling** : le modèle ajoute au début un token spécial `[CLS]` entraîné pour **absorber le sens
+  global** ; on ne lit que son vecteur. *(Le délégué qui résume la classe.)*
+  Utilisé par la famille **BERT/BGE** (donc **bge-m3**).
+
+**⚠️ Le pooling doit matcher l'entraînement du modèle.** Un modèle entraîné en CLS agrégé en mean (ou
+l'inverse) produit un vecteur **dégradé mais silencieux** : aucune erreur, juste un retrieval moins
+précis — le pire type de bug (invisible sans éval).
+
+**Dans Spring AI** : `TransformersEmbeddingModel` lit un **nœud de sortie** ONNX nommé
+`model-output-name` (défaut `last_hidden_state` = les vecteurs-tokens bruts) puis applique un pooling.
+Deux conséquences pratiques quand on change de modèle :
+1. **Nom de sortie** : si le modèle n'expose pas ce nœud sous ce nom → **crash au démarrage** (à régler
+   via `spring.ai.embedding.transformer.onnx.model-output-name`).
+2. **Type de pooling** : vérifier qu'il correspond au modèle (CLS pour BGE). Sinon dégradation muette.
+
+**À retenir** : changer de modèle d'embedding, ce n'est pas juste changer une URL — c'est aussi
+**réaccorder le pooling et le nœud de sortie** au nouveau modèle. Décidé/vérifié au 1er démarrage,
+mesuré sur le golden set (§7).
+
 ---
 
 ## 2. Chunking — la frontière compte plus que la taille
@@ -160,9 +187,14 @@ comptabilité) restait absent → **plafond de recall** : il n'était pas dans l
 
 ### Leviers fiables quand le rerank ne suffit pas (par ROI décroissant)
 
-1. **Modèles multilingues** (souvent le plus gros gain). Nos 2 modèles sont **anglophones**
-   (`all-MiniLM` embeddings + `ms-marco-MiniLM` rerank) → sous-optimaux sur du **droit français**.
-   Cibles : embeddings `bge-m3` / `multilingual-e5-large`, rerank `bge-reranker-v2-m3`.
+1. **Modèles multilingues** (souvent le plus gros gain). **✅ FAIT (Tranche 5)** : embeddings
+   `all-MiniLM` (384d) → **bge-m3** (1024d) ; rerank `ms-marco-MiniLM` → **bge-reranker-base**.
+   **Gain mesuré** : Q2 « obligations comptables » passait par une fuite cross-doc (`AUSCGIE 697`
+   commissaire aux comptes) en #1 → désormais top-3 = 100% AUDCG commerçant, et `art. 13` (idéal,
+   **absent** du top-N avant) est **récupéré** → gain de **recall réel**, pas juste du tri.
+   ⚠️ Pièges rencontrés : (a) ONNX à **poids externes** (`model.onnx_data`) introuvable car résolu par
+   rapport au CWD → prendre une variante **single-file < 2 Go** (`model_quantized.onnx` int8) ;
+   (b) **pooling** BGE = CLS mais défaut Spring AI = mean (fonctionnel, à raffiner si besoin, cf §1).
 2. **Recherche hybride dense + lexical, fusionnée par RRF.** Le vectoriel rate les **termes exacts**
    ("SARL", "art. 311", "RCCM") ; **BM25** (lexical) les attrape. On lance les deux et on fusionne les
    rangs (**Reciprocal Rank Fusion**). Standard industrie, très fiable.
@@ -176,6 +208,16 @@ comptabilité) restait absent → **plafond de recall** : il n'était pas dans l
 
 **Ordre d'attaque rationnel** : (1) multilingue → (2) hybride RRF → (3) chunks. Ce sont des gains de
 **recall/qualité** (ils font *apparaître* le bon doc). Rerank et top-N ne font que *réordonner* l'existant.
+
+### Bonus : le score rerank BGE donne un seuil d'abstention gratuit
+
+Les rerankers **BGE** sont calibrés pour que **`score > 0 ≈ pertinent`, `score < 0 ≈ non pertinent`**
+(≠ ms-marco dont les logits sont sur une échelle libre, bons pour ordonner mais pas pour décider).
+Cas réel (Tranche 5) : « capital minimum SARL » → les 3 résultats **tous négatifs** (-0.39, -1.73, -1.96),
+parce que l'AUSCGIE révisé 2014 **ne fixe plus** de minimum SARL → la bonne réponse **n'existe pas**.
+→ Un **seuil à ~0 sur le score rerank** = mécanisme d'**abstention** (« aucun article pertinent »).
+C'est la brique anti-hallucination du **guardrail** (Tranche 7) : mieux vaut *ne pas répondre* que citer
+un article hors-sujet. Le RAG doit savoir dire « je ne sais pas ».
 
 ### Le fil rouge : sans éval, on optimise à l'aveugle
 

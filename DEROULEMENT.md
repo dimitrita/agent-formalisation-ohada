@@ -112,14 +112,45 @@ Objectif : retrouver les bons **articles OHADA** pour sourcer chaque affirmation
   ⚠️ Limite : le rerank réordonne seulement le top-N retrieved → il soigne la **précision**, pas le **recall**
   (si l'article idéal n'est pas dans les 20 candidats, il reste absent). Leviers futurs : top-N ↑, nettoyage chunk.
 
+### Tranche 5 — modèles multilingues (embeddings + rerank) ✅
+
+- 💡 **Bascule du duo anglophone → multilingue FR** : embeddings `all-MiniLM` (384d) → **bge-m3** (1024d) ;
+  rerank `ms-marco-MiniLM` → **bge-reranker-base**. Raison : corpus = droit OHADA **en français**, les
+  modèles anglophones sous-performent (cf ratés Tranche 4).
+- 💡 **Reranker = `bge-reranker-base`, PAS `-v2-m3`** : le v2-m3 (meilleur) n'a **pas d'export ONNX
+  single-file** dispo (BAAI = safetensors only). `base` est multilingue, single-file, gros progrès vs
+  l'anglophone. Upgrade v2-m3 = plus tard SI l'éval le justifie (nécessiterait un export Python/optimum).
+- 🏗️ Manifests `models/embedding/SOURCES.md` (nouveau) + `models/reranker/SOURCES.md` (maj) — recettes
+  de téléchargement reproductibles. `.gitignore` couvrait déjà `models/**`.
+- ✋ J'ai téléchargé les 2 modèles.
+- 💡 **Piège ONNX poids externes** : bge-m3 full-precision >2 Go → poids dans `model.onnx_data` séparé,
+  qu'ONNX Runtime cherche par rapport au **CWD** (pas au `.onnx`) → crash `file introuvable`. **Fix** :
+  prendre une variante **single-file < 2 Go** = `model_quantized.onnx` (int8, CPU-friendly, sortie 1024d).
+- 🏗️ Config `application.properties` : `spring.ai.embedding.transformer.onnx.model-uri` + `tokenizer.uri`,
+  `dimensions 384 → 1024`. Pooling laissé au **défaut Spring AI (mean)** — bge-m3 est CLS mais mean reste
+  fonctionnel ; à raffiner (variante `sentence_transformers.onnx`) seulement si l'éval déçoit.
+- ✋ **Ré-embed du corpus** : `DROP TABLE ohada_core` (colonne figée `vector(384)`) → Spring recrée en
+  `vector(1024)` au boot → ré-ingestion AUSCGIE + AUDCG. **Lent** (~plusieurs min) : bge-m3 ≈ 568M params
+  (25× MiniLM) sur CPU. Diagnostic en cours d'ingestion (Claude) : DB à 0 = normal (INSERT batch en fin),
+  process Java à 4 Go RAM + CPU qui grimpe = ça calcule, pas figé.
+- 💡 **Résultats mesurés sur les 3 questions golden** (endpoint `/rag/search-rerank`) :
+  - **Q2 « obligations comptables du commerçant »** : Tranche 4 → `AUSCGIE 697 (commissaire aux comptes)`
+    en #1 (fuite cross-doc). Tranche 5 → **top-3 = 100% AUDCG commerçant**, et `art. 13` (idéal, **absent**
+    du top-N en T4) est **récupéré** (#2, rerank +3.22). ✅ **Gain de recall réel**, pas juste du tri.
+  - **Q3 « statut d'entreprenant »** : plus aucune fuite cross-doc, tout dans le Titre 2 AUDCG.
+  - **Q1 « capital minimum SARL »** : les 3 résultats ont un `score_rerank` **négatif** (-0.39 / -1.73 /
+    -1.96). ✋ **Observation user** : l'AUSCGIE **révisé 2014** ne fixe plus de minimum SARL (art. 311
+    renvoie aux statuts) → la bonne réponse n'existe pas → le RAG **devrait s'abstenir**.
+- 💡 **Trouvaille = seuil d'abstention gratuit** : les rerankers **BGE** sont calibrés `>0 ≈ pertinent,
+  <0 ≈ non pertinent`. Un **seuil à ~0 sur le score rerank** = mécanisme d'abstention → motive
+  concrètement le **guardrail Tranche 7** (chiffres réels, pas théorie).
+
 **Reste pour finir la Phase 1** (ordre décidé) :
-1. **Tranche 5 — modèles multilingues** : remplacer les modèles anglophones (`all-MiniLM` embeddings,
-   `ms-marco-MiniLM` rerank) par du multilingue orienté FR (`bge-m3` / `e5`, `bge-reranker-v2-m3`).
-   ⚠️ Changer l'embedding ⇒ changer `dimensions` + **ré-embedder tout le corpus**.
-2. **Tranche 6 — recherche hybride (dense + BM25) fusionnée par RRF** : rattraper les termes exacts
-   ("SARL", "art. 311", "RCCM") que le vectoriel rate.
-3. **Tranche 7 — guardrail** de citation obligatoire (anti-hallucination).
-- Plus tard / bonus : nettoyage des chunks (résidus PDF), contextual retrieval, montée top-N.
+1. **Tranche 6 — recherche hybride (dense + BM25) fusionnée par RRF** : rattraper les termes exacts
+   ("SARL", "art. 311", "RCCM") que le vectoriel rate. (Q1 art. 311 non récupéré = cas d'école.)
+2. **Tranche 7 — guardrail** citation obligatoire + **abstention** sur seuil rerank (anti-hallucination).
+- Plus tard / bonus : nettoyage des chunks (**boundary bleed** repéré : en-têtes de section collés aux
+  chunks, ex. art.12/art.29), contextual retrieval, montée top-N, upgrade rerank v2-m3.
 
 > 💡 **Pourquoi 5 et 6 AVANT le guardrail** : ils améliorent le **recall** (faire apparaître le bon
 > article). Le rerank et le top-N ne font que *réordonner* l'existant. Détail des leviers :

@@ -66,6 +66,31 @@ qui a fait quoi, et pourquoi.
 - Mettre à jour au fil de l'eau (fin de tranche / choix structurant / test validé), pas seulement
   en fin de phase.
 
+## Articles LinkedIn (principes de rédaction — IMPÉRATIF)
+
+Les articles vivent dans `apprentissage/ARTICLE-LINKEDIN-xx-<slug>.md`. Format = **carrousel de
+slides**. Règles à respecter pour chaque article :
+
+- **Autoportant** : le lecteur comprend **tout seul**, sans commentaire oral. Ne JAMAIS écrire comme
+  un support de présentation qu'on compléterait à l'oral — tout ce qui doit être compris est écrit.
+- **Une histoire, pas une liste** : narration avec un début, une tension, une résolution.
+- **Liens entre slides** : chaque slide **appelle la suivante** (fin de slide = accroche vers la
+  slide d'après) et **découle de la précédente**. On doit sentir un fil, pas des cartes indépendantes.
+- **Cible prioritaire = les décideurs / directeurs** (pas les développeurs) : des gens qui doivent
+  comprendre les **enjeux pour leur organisation** (coût, risque, confidentialité, dépendance,
+  conformité) et saisir **un peu** les concepts, sans être techniques. Le technicien peut suivre, mais
+  ne doit PAS être le lecteur avantagé. Cadrer chaque idée par sa **conséquence business/organisation**,
+  pas par sa mécanique interne.
+- **Ton humain, pas « IA »** : varier le rythme des phrases, éviter tout **gabarit répétitif** (ne pas
+  finir chaque slide par la même formule/flèche, ne pas enchaîner « croyance → révélation → bénéfice »
+  de façon mécanique). Une vraie voix : un avis, une anecdote, une question rhétorique. Les transitions
+  entre slides doivent être **naturelles** (parfois implicites), jamais un tic répété reconnaissable.
+- **Compréhensible par technicien OU non** : vulgariser sans jargon inutile ; un terme technique gardé
+  = expliqué en une phrase, en ligne. Analogies concrètes bienvenues.
+- **Chiffres réels du projet** pour la crédibilité (ne pas inventer).
+- Chaque fichier article contient : la **version à poster** (slides) + des **notes de rédaction**
+  (non postées : longueur, choix de vulgarisation, visuel suggéré).
+
 ## Notes
 
 - RTK (voir CLAUDE.md global) : préfixer les commandes shell par `rtk` quand un filtre existe.

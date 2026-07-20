@@ -188,9 +188,40 @@ rattraper les termes précis (« SARL », « art. 311 », « RCCM ») que le sen
     pas un mot absent (Q1). Leviers pour Q1 : **expansion de requête** (SARL → « société à responsabilité
     limitée »), sémantique **OR** (`websearch_to_tsquery`), et surtout **abstention (T7)**.
 
+### Tranche 7 — guardrail (abstention + citation obligatoire + génération groundée) ✅
+
+**L'idée en une phrase** : `/rag/answer` répond à une question, mais **sous contrôle** — il refuse
+plutôt que d'halluciner, et toute réponse est **sourcée**. C'est l'aboutissement de la Phase 1 RAG.
+
+- 💡 **Refactor archi d'abord** : le pipeline hybride (T6) est extrait du controller vers un **service**
+  `HybridSearchService` (`@Service`). Pourquoi : le guardrail a besoin du MÊME pipeline (dense+lexical→RRF
+  →rerank). Dupliquer = bug garanti le jour où on modifie un côté. `HybridSearchController` (T6) devient
+  mince (délègue au service, garde `/search-hybrid` = diagnostic). `@PostConstruct` (index FTS) déménage
+  dans le service. Le service renvoie un record typé `ResultatRerank(id, ref, texte, scoreRerank, scoreRrf)`
+  **trié par score rerank décroissant** (le [0] = le meilleur).
+- 🏗️ `GuardrailController` (`GET /rag/answer?q=`), 2 garde-fous **dans l'ordre** :
+  1. **Abstention AVANT tout appel LLM** : `doitSabstenir(chunks)` = `chunks.isEmpty() || chunks.get(0)
+     .scoreRerank() < seuil`. Si même le meilleur chunk est sous le seuil → réponse `ABSTENTION`, **zéro
+     token Claude**. Double bénéfice : anti-hallucination (pas de source fiable = pas de réponse inventée)
+     + économie. Seuil externalisé = `guardrail.rerank-min-score=0.0` (frontière calibrage BGE `>0=pertinent`).
+  2. **Grounding + citation** : si on répond, Claude reçoit un **prompt système strict** (« réponds
+     UNIQUEMENT à partir des articles fournis, cite `[ref]` chaque affirmation, sinon dis que tu ne sais
+     pas »). Le contexte = chaque chunk préfixé de `[ref]`. La réponse porte **toujours** sa liste de
+     `sources` (ref + score + extrait) → traçabilité.
+- ✋ **J'ai écrit la règle d'abstention** (`doitSabstenir`) après avoir lu/compris toute la structure
+  (controller + service). Point clé retenu : le court-circuit `||` protège le `get(0)` (liste vide → membre
+  droit jamais évalué → pas d'`IndexOutOfBounds`) ; un seul test sur `get(0)` suffit car la liste est triée.
+- 💡 **Choix `<` strict** : au score exactement 0.0 on répond (0 = cas neutre BGE, bénéfice du doute).
+  Rendre l'agent plus prudent = remonter le seuil en config, sans toucher au code.
+- 💡 **API vérifiée via context7** (règle projet) : `ChatClient.prompt().system(txt).user(txt).call()
+  .content()` confirmé sur Spring AI **2.0.0** (`.system(String)` existe sur `ChatClientRequestSpec`).
+- 💡 **Cas d'usage type = Q1 « capital minimum SARL »** : la recherche remonte bien 3 chunks mais scores
+  rerank **négatifs** (la révision AUSCGIE 2014 a supprimé ce minimum → la réponse n'existe pas) → le gate
+  s'abstient. C'est ce cas que le placeholder `isEmpty()` seul RATAIT (la liste n'est pas vide, juste non
+  pertinente). ⏳ **À tester côté user** : `curl /rag/answer?q=...` sur les 3 questions golden (Q1 attendu
+  = ABSTENTION ; Q2/Q3 = REPONDU avec citations).
+
 **Reste pour finir la Phase 1** (ordre décidé) :
-1. **Tranche 7 — guardrail** citation obligatoire + **abstention** sur seuil rerank (`score < 0` = « je ne
-   sais pas », cf T5) — anti-hallucination. Q1 = le cas d'usage type.
 - Plus tard / bonus : **expansion de requête** (sigles → forme longue) pour Q1 ; nettoyage des chunks
   (**boundary bleed** : en-têtes de section collés, ex. art.12/art.29) ; contextual retrieval ; montée
   top-N ; upgrade rerank v2-m3.

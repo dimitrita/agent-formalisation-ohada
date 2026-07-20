@@ -38,9 +38,10 @@ fin), pas un seul `top-k` brut. Et ça peut rester **local, gratuit, privé**.
 
 ## Autres sujets candidats (à développer plus tard)
 
-### n°2 — « Non, votre RAG n'a pas besoin d'un LLM pour tout »
+### n°2 — « Mon moteur de recherche juridique n'a pas de ChatGPT dedans » ✅ ÉCRIT
 Embedding ≠ LLM. Démystifie la confusion la plus fréquente : on peut vectoriser **en local, gratuitement**,
 sans appel API. Angle pédagogique + argument coût/confidentialité. Matière : `APPRENTISSAGES.md` §1.
+→ Brouillon : `ARTICLE-LINKEDIN-02-embedding-vs-llm.md` (carrousel 8 slides).
 
 ### n°3 — « Comment je sais que mon RAG répond juste (sans deviner) »
 Le **golden set** + `recall@k`. Montre la rigueur d'évaluation (mesure reproductible vs « ça a l'air de

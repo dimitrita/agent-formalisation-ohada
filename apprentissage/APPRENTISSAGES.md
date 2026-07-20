@@ -159,6 +159,25 @@ optionnel).
 
 ## 8. Reranking, et quoi faire quand il ne suffit pas
 
+### Recherche vs reranking — l'intuition (le « PLUS » qu'apporte le rerank)
+
+La recherche **trouve déjà** un lien question ↔ réponse. Alors que fait le rerank de plus ? La clé,
+c'est **QUAND** et **COMMENT** le lien est jugé :
+
+- **Recherche = jugée À L'AVANCE et SÉPARÉMENT.** Chaque chunk a été résumé en 1 vecteur **une fois,
+  sans connaître la question**. À la requête, on compare deux résumés faits chacun de leur côté.
+  Rapide, mais l'étiquette est **générale** → confond les cas voisins (ex. « SARL » vs « SA », tous deux
+  « société + capital »). Son job : **ne rien rater** (grand filet de ~20) = *recall*.
+- **Reranking = jugé À LA DEMANDE et ENSEMBLE.** Le cross-encoder relit chaque candidat **avec la
+  question sous les yeux, les deux en même temps**. Il voit la nuance que l'étiquette générale ratait.
+  Son job : **mettre LE bon en premier** (garder top-3) = *précision*.
+- **Pourquoi deux étages et pas que le minutieux ?** Le rerank est **lent** (il lit vraiment chaque
+  paire) → impossible sur les 1213 articles à chaque question. Donc : recherche dégrossit (20) →
+  rerank affine (3). Deux **métiers différents**, pas deux fois le même.
+
+Image d'enfant : la recherche te tend **20 bonnes pioches en vrac** (étiquettes collées à l'avance) ;
+le rerank les **relit avec ta question en tête** et dit lequel est vraiment le meilleur.
+
 ### Ce qu'est (et n'est pas) le reranking
 
 - **Retrieval vectoriel** = rappel large mais grossier : compare des **proximités de sens de surface**

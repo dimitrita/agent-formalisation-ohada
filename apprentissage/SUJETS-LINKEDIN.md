@@ -92,6 +92,42 @@ cas OHADA = **chiffres/requête RÉELS** (générer via `construireRequete` avan
 
 **Matière** : `APPRENTISSAGES.md` §10 + `FormeJuridiqueService.construireRequete` + §9 (vocabulaire littéral).
 
+### ⭐ n°7 — « System, user, contexte : qui parle à l'IA, et pourquoi ça change tout »
+**Angle** : la plupart des gens croient qu'on « parle » à un LLM avec **un** message. Faux. Un appel bien
+conçu a **plusieurs rôles** aux fonctions distinctes, et les confondre = fuite de règles, hallucinations,
+prompt injection. Démystifier **qui dit quoi** dans un appel LLM d'entreprise.
+
+**Les 3 rôles (analogie fil rouge = un employé et son cadre de travail)** :
+- **System prompt = la fiche de poste + le règlement intérieur.** Posé par *l'entreprise*, pas par
+  l'utilisateur. Définit le rôle, les **règles non négociables** (« ne réponds que sur les documents
+  fournis », « cite ta source », « n'invente jamais un chiffre »), le ton. L'utilisateur ne devrait
+  jamais pouvoir le réécrire.
+- **User message = la demande du client.** Les **données** de la requête (le profil, la question). Variable,
+  potentiellement **hostile** (d'où : ne jamais y mettre les règles — un utilisateur pourrait dire
+  « ignore les instructions précédentes »).
+- **Contexte / documents = le dossier qu'on pose sur le bureau.** Les chunks RAG récupérés. L'employé
+  raisonne **dessus**, pas sur sa mémoire. C'est le lien direct avec les articles n°1/6 (retrieval).
+
+**Le point qui accroche (sécurité)** : *pourquoi séparer* ? Parce que mélanger règles et données = **prompt
+injection**. Si les garde-fous sont dans le user message, l'utilisateur les efface d'une phrase. Dans le
+system, ils tiennent. C'est un enjeu **conformité/risque**, pas un détail technique.
+
+**Cas vécu (preuve OHADA)** : dans `FormeJuridiqueService`, `CONSIGNE_SYSTEME` (rôle **system**) porte les
+règles anti-hallucination + « cite AUSCGIE art. X » + les articles RAG ; `decrireProfil` (rôle **user**)
+ne porte QUE les données du porteur. Séparation nette = garde-fou T7 (abstention, citation obligatoire)
+robuste. Montrer les deux blocs côte à côte.
+
+**Message clé (décideurs)** : *qui* écrit *quelle* partie du prompt est une décision de **gouvernance**.
+Les règles métier/conformité vivent dans le system (verrouillé par l'entreprise) ; l'utilisateur ne fournit
+que sa demande. Confondre les deux = ouvrir la porte à la manipulation et à l'hallucination.
+
+**Attention rédaction** (cf CLAUDE.md) : cadrer par le **risque** (fuite de règles, injection), pas par la
+syntaxe d'API. Analogie employé/fiche de poste/dossier tenue tout du long. Extrait de code OHADA = réel
+(pas inventé).
+
+**Matière** : `FormeJuridiqueService` (`CONSIGNE_SYSTEME` vs `decrireProfil`) + guardrail T7 (`DEROULEMENT.md`)
++ `APPRENTISSAGES.md` mémo agent.
+
 ---
 
 ## Prochaine étape

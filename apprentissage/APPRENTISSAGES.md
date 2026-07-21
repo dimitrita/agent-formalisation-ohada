@@ -254,6 +254,68 @@ après**. Sinon on « améliore » au feeling. Cf section 7 + `EVALUATION-RAG.md
 
 ---
 
+## 9. Le chunk EST l'unité de citation — un corpus sale rend l'objectif métier inatteignable
+
+L'objectif métier n'est pas négociable : **toute affirmation normative doit citer un article précis**
+(ex. « AUSCGIE art. 311 »). Une affirmation sans source = **échec**, pas une réponse valide. Or dans
+notre corpus, **1 article = 1 chunk = 1 citation** : le chunk n'est donc pas « un bout de texte », c'est
+**l'unité que l'agent est censé pouvoir montrer**. Sa **granularité** (le bon découpage) ET son
+**intégrité** (le bon texte sous le bon numéro) conditionnent directement l'objectif. On l'a appris en
+inspectant le **texte brut stocké en base** (pas les scores) : deux défauts d'extraction PDF invisibles
+côté recherche mais fatals côté citation.
+
+### Défaut 1 — désaccentuation + espaces multiples (dégrade la citation, pas le sens)
+
+Le texte est stocké **sans accents** et avec des **espaces irréguliers**, ex. réel en base :
+`"Le caractere commercial d'une   societe est determine par sa forme"`. Impact **asymétrique** :
+- le retrieval **dense** (bge-m3, « par le sens ») **y résiste** — nos questions Q2/Q3 remontaient les
+  bons articles ;
+- mais la recherche **lexicale** (full-text, « par le mot exact ») est **dégradée**, et surtout
+  **l'extrait montré à l'humain** l'est aussi. Or c'est ce texte que le juriste **lit et vérifie**.
+  Une citation illisible ou tronquée = citation **inexploitable**, même si le bon article a été trouvé.
+
+### Défaut 2 (GRAVE) — collision des suffixes « N-1 » avec l'article de base « N »
+
+Le regex de découpage repère les débuts d'article via un motif type « Article <numéro> ». Face à
+`"Article 311-1"`, il a **capturé 311** (le suffixe est tombé). Puis la déduplication (§5, qui ne garde
+qu'un chunk par numéro) a gardé **UN seul** chunk sous la `ref` « 311 ». Résultat **vérifié en base** :
+la séquence est art.310 (dénomination) → art.311 (mais dont le texte est en réalité celui de l'**art.
+311-1**, souscription des parts) → art.312 (apports). **Le VRAI art. 311 a disparu**, écrasé par son
+voisin à suffixe. Pire : ce risque avait été **prédit** dès la tranche 3 (« capturer le suffixe *bis*
+sinon les articles type 853-1 sont perdus ») — noté, jamais corrigé.
+
+### Le cas métier qui a tout révélé : « capital minimum d'une SARL ? »
+
+Bonne réponse en droit OHADA révisé 2014 : **il n'y a PAS de minimum légal**, le capital d'une SARL est
+**librement fixé par les associés dans les statuts** (la révision 2014 a supprimé l'ancien plancher de
+1 000 000 FCFA). L'article qui le dit = **AUSCGIE art. 311** ; une règle générale existe aussi à
+**l'art. 65** (« capital librement déterminé ; l'Acte uniforme peut fixer un minimum selon la forme »).
+Le RAG ne pouvait **rien citer**, pour **deux** raisons cumulées :
+- **(a) mot absent** : le sigle « SARL » n'apparaît **nulle part** dans le corpus (la loi écrit
+  « société à responsabilité limitée » en toutes lettres) → la recherche lexicale sur « sarl » matche
+  **0 ligne** (cf. la frontière du lexical, §8) ;
+- **(b) article détruit** : même un retrieval **parfait** ne peut pas renvoyer l'art. 311 — son texte
+  **n'est plus en base**, remplacé par celui de 311-1.
+
+### La leçon (le cœur)
+
+- **Un article perdu ou mal étiqueté = une citation que l'agent ne produira JAMAIS**, quelle que soit la
+  qualité du moteur de recherche. Le meilleur reranker du monde ne réordonne que ce qui existe (§8).
+- **Un retrieval « qui marche » peut masquer un corpus sale.** La robustesse du dense fait passer les
+  métriques de recherche **au vert** alors que la **qualité de citation** (ce que l'humain lit) est
+  cassée. D'où la règle : **inspecter le texte brut stocké**, pas seulement les scores.
+- **Le chunking encode une décision métier.** « Citer l'article exact » **impose** que chaque numéro,
+  suffixes compris (311-1, 853-1), soit préservé **distinctement**. La règle de découpage n'est pas
+  neutre : ici, la dédup par numéro (§5) était bonne pour les blocs répétés mais **écrasait** les vrais
+  suffixes — même mécanique, deux effets opposés selon le cas.
+- **Un garde-fou peut donner un faux sentiment de sécurité.** Sur cette question, l'**abstention** (§8,
+  « aucun article pertinent, je ne réponds pas ») **semblait** juste — mais s'appuyait en partie sur une
+  **mauvaise raison** : elle masquait une **donnée manquante** (bug de corpus) derrière un comportement
+  d'apparence prudente. Un système qui s'abstient « pour de bon » et un qui s'abstient « parce qu'on a
+  cassé sa source » se ressemblent en surface — seul l'audit du corpus les distingue.
+
+---
+
 ## Mémo « comment marche un agent » (rappels de base)
 
 - **Embedding** : texte → vecteur ; sens proche → vecteurs proches → recherche « par le sens ».

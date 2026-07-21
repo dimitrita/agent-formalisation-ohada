@@ -232,6 +232,43 @@ plutôt que d'halluciner, et toute réponse est **sourcée**. C'est l'aboutissem
 
 ---
 
+## Phase 2 — nœud `forme_juridique` (en cours)
+
+Objectif : à partir d'un **profil de porteur**, recommander **une forme juridique** (ENTREPRENANT / EI /
+SARL / SARL_U / SA) **justifiée et sourcée** OHADA, avec les formes écartées + leur raison. C'est le
+premier vrai nœud « agent » : il porte le contrat de citation et conditionne tout le downstream (spec §5).
+
+### Avant de coder — vérif corpus (💡 déclenchée par une question user)
+
+- ✋ Question : les 5 formes existent-elles vraiment dans le corpus, et peut-on les **citer** ? Faut-il pivoter ?
+- 🏗️ Vérif en base (source de vérité, pas les PDF) : les 5 formes sont présentes et citables
+  (SA 23, SARL 23, entreprenant 16, commerçant 25, SAS 7). **Pas de pivot** : l'objectif tient.
+- 💡 **Mais 2 défauts de corpus confirmés** (texte brut inspecté) → détaillés dans `apprentissage/APPRENTISSAGES.md` §9 :
+  1. **désaccentuation + espaces multiples** (extraction PDFBox) — dense robuste, lexical + citations dégradés ;
+  2. **GRAVE : collision `311-1` → `311`** — le vrai **art. 311** (capital SARL librement fixé, révision 2014)
+     a été **écrasé** par l'art. 311-1. Explique l'échec Q1 « capital minimum SARL » : sigle « SARL » absent
+     du texte **+** article-réponse détruit. Défaut déjà prédit en tranche 3, à corriger dans la tranche
+     nettoyage (planifiée **avant** le nœud rédacteur). Non bloquant pour T1.
+
+### Tranche 1 — nœud autonome (service + endpoint) ✅ compile
+
+- 💡 **Nœud construit en service Spring autonome d'abord**, embarqué dans le graphe LangGraph4j en Phase 3.
+  Construire la brique avant la tuyauterie = testable isolément.
+- 🏗️ Contrats (records) : `ProfilPorteur` (entrée : activité, nb associés, capital nullable, résident…) et
+  `RecoForme` (sortie : `forme`, `justification`, `formesEcartees[{forme,raison}]`, `capitalMinApplicable`,
+  `confiance`, `citations[]`) avec enum `Forme` + records imbriqués.
+- 🏗️ `FormeJuridiqueService` (@Service) : profil → `construireRequete` → RAG hybride (réutilise
+  `HybridSearchService` de la Phase 1) → **structured output** `ChatClient…call().entity(RecoForme.class)`
+  (Claude remplit le record typé, borné aux articles = grounding + citation, comme T7). API `.entity()`
+  vérifiée via **context7** (Spring AI 2.0.0). Renvoie `Recommandation(reco, sourcesRag)` pour la traçabilité.
+- 🏗️ `FormeJuridiqueController` mince : `POST /forme/recommander` (corps JSON = profil).
+- ✋ **J'ai écrit `construireRequete`** (le pont profil→RAG) : vocabulaire juridique **littéral** (pas de
+  sigle « SARL », la loi écrit en toutes lettres — leçon §9), piloté par le nombre d'associés, enrichi des
+  concepts qui départagent les formes (responsabilité, capital, apports).
+- 🏗️ `./mvnw -DskipTests compile` = **exit 0**. ⏳ À tester : `POST /forme/recommander` sur 2-3 profils.
+
+---
+
 ## Concepts clés & apprentissages
 
 ➡️ Déplacés dans **`apprentissage/APPRENTISSAGES.md`** (savoir transverse durable, relisable à froid).

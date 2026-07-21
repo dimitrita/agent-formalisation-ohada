@@ -1,0 +1,56 @@
+# Requêtes de test — noeud forme_juridique (Phase 2, T1)
+# Extension VSCode requise : "REST Client" (humao.rest-client).
+# Démarrer l'app d'abord (rtk mvn spring-boot:run), puis cliquer "Send Request" au-dessus d'un bloc.
+#
+# Endpoint : POST /forme/recommander
+# Corps    : ProfilPorteur (JSON) — voir ProfilPorteur.java
+# Réponse  : Recommandation (RecoForme + articles RAG utilisés, pour traçabilité)
+
+@baseUrl = http://localhost:8080
+
+### 1. Cas nominal — 2 associés, veut une responsabilité limitée → attendu : SARL
+POST {{baseUrl}}/forme/recommander
+Content-Type: application/json
+
+{
+  "activite": "commerce de détail",
+  "nbAssocies": 2,
+  "capitalEnvisageFcfa": null,
+  "apportsEnNature": false,
+  "resident": true,
+  "budgetFormalitesFcfa": null,
+  "objectif": "responsabilité limitée"
+}
+
+### 2. Mono-associé, budget serré, coût minimal → attendu : ENTREPRENANT ou EI
+POST {{baseUrl}}/forme/recommander
+Content-Type: application/json
+
+{
+  "activite": "vente ambulante de fruits",
+  "nbAssocies": 1,
+  "capitalEnvisageFcfa": 0,
+  "apportsEnNature": false,
+  "resident": true,
+  "budgetFormalitesFcfa": 20000,
+  "objectif": "coût minimal"
+}
+
+### 3. Plusieurs associés, veut lever des fonds → attendu : SA (capital/gouvernance lourds mais adaptés)
+POST {{baseUrl}}/forme/recommander
+Content-Type: application/json
+
+{
+  "activite": "start-up fintech",
+  "nbAssocies": 4,
+  "capitalEnvisageFcfa": 50000000,
+  "apportsEnNature": true,
+  "resident": true,
+  "budgetFormalitesFcfa": 5000000,
+  "objectif": "lever des fonds"
+}
+
+### 4. TODO(human) — écris ici un 4e scénario de test
+# But : couvrir un cas LIMITE que les 3 premiers ne testent pas.
+# Ex. de pistes : porteur NON résident, OU apports en nature sans capital décidé (capitalEnvisageFcfa: null),
+# OU objectif contradictoire avec le profil. Reprends la structure d'un bloc ci-dessus (### titre, POST, headers, JSON).

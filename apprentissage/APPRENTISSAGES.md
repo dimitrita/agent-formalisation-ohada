@@ -316,6 +316,50 @@ Le RAG ne pouvait **rien citer**, pour **deux** raisons cumulées :
 
 ---
 
+## 10. Query construction — la requête RAG n'est pas la question de l'utilisateur
+
+Étape souvent invisible, pourtant **décisive** : avant de chercher, il faut **fabriquer la phrase de
+recherche**. Dans le nœud `forme_juridique`, l'utilisateur ne pose aucune question — il remplit un
+**profil** (activité, nb associés, capital, objectif…). C'est `construireRequete()` qui **traduit ce
+profil en requête**. Cette traduction s'appelle *query construction* (et *query expansion* quand on
+enrichit de termes).
+
+### L'intuition (la requête est un aimant)
+
+La recherche compare la **requête** aux **chunks**. Le bon chunk ne remonte que s'il **ressemble** à la
+requête — par les mots (moteur lexical) ou par le sens (moteur dense). Donc **si le bon mot/concept n'est
+pas dans la requête, le bon article ne vient pas sur le bureau du LLM**. La qualité de la réponse est
+plafonnée par la qualité de l'aimant, avant même que le LLM n'entre en jeu.
+
+### Trois décisions de conception (illustrées par le cas OHADA)
+
+1. **Vocabulaire LITTÉRAL, pas les sigles.** La loi écrit « société à responsabilité limitée », jamais
+   « SARL ». Le lexical ne matche que le mot **présent dans le texte source**. On met donc les mots que la
+   loi emploie réellement (prolonge §9 : le texte brut du corpus dicte le vocabulaire de la requête).
+2. **Injecter les concepts qui DÉPARTAGENT, pas seulement le sujet.** « vente de vêtements » ramène des
+   articles sur le commerce, mais pas ceux sur **capital / responsabilité / associés** — or c'est ça qui
+   permet de *choisir* entre EI, SARL_U, SA. On ajoute donc exprès `capital social responsabilite des
+   associes apports` : on aimante les articles utiles à la **décision**, pas seulement au thème.
+3. **Adapter l'aimant au profil (branche conditionnelle).** 1 associé → termes `entreprenant / entreprise
+   individuelle / societe unipersonnelle / un seul associe` ; plusieurs → `plusieurs associes / SARL / SA`
+   (en toutes lettres). Un porteur seul et cinq associés ne visent pas les mêmes formes → deux aimants.
+
+### La leçon (le cœur)
+
+- **La requête encode une hypothèse MÉTIER.** Le ternaire sur le nb d'associés affirme « c'est le premier
+  critère qui oriente la forme ». Ce n'est pas de la technique : c'est du **droit** injecté dans la
+  recherche. Mauvais choix ici = mauvais chunks = mauvaise reco, **même avec un LLM parfait**.
+- **Précision vs rappel.** Requête trop pauvre (juste l'activité) → on rate les articles décisifs. Trop de
+  mots au hasard → on ramène du bruit. L'art = mettre **les mots qui discriminent la décision à prendre**.
+- **Query construction ↔ objectif du RAG.** On ne construit pas la requête « en général » : on la construit
+  pour le **but** du nœud (ici *trancher entre formes*). Change le but (ex. calculer un coût) → change la
+  requête. La requête est le premier endroit où l'objectif métier entre dans la mécanique.
+- **Chaîne complète :** profil → **requête (aimant orienté, filet large)** → retrieval hybride (dense +
+  lexical, §1/§8) → **rerank (tri fin, §8)** → contexte → LLM. La requête décide **ce qui est pêchable** ;
+  le rerank décide **ce qu'on garde**. Un maillon faible plafonne toute la chaîne.
+
+---
+
 ## Mémo « comment marche un agent » (rappels de base)
 
 - **Embedding** : texte → vecteur ; sens proche → vecteurs proches → recherche « par le sens ».

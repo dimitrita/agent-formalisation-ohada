@@ -4,6 +4,8 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.converter.BeanOutputConverter;
+import org.springframework.ai.converter.MarkdownCodeBlockCleaner;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -27,6 +29,16 @@ public class FormeJuridiqueService {
     private final HybridSearchService hybridSearch;
     private final ChatClient chatClient;
     private final int topK;   // combien d'articles on donne comme contexte a Claude
+
+    /**
+     * Convertisseur "reponse LLM -> RecoForme". On le construit nous-memes (au lieu du .entity(Class)
+     * par defaut) pour lui greffer un MarkdownCodeBlockCleaner : Claude renvoie souvent son JSON
+     * enrobe de ```json ... ``` et le parser Jackson bute sur le backtick. Le cleaner retire ces
+     * fences AVANT le parsing. Etant aussi un FormatProvider, ce converter injecte tout seul le
+     * schema JSON attendu dans le prompt quand on le passe a .entity(converter).
+     */
+    private final BeanOutputConverter<RecoForme> recoConverter =
+            new BeanOutputConverter<>(RecoForme.class, null, new MarkdownCodeBlockCleaner());
 
     public FormeJuridiqueService(HybridSearchService hybridSearch,
             ChatClient.Builder builder,
@@ -82,7 +94,11 @@ public class FormeJuridiqueService {
                 .system(CONSIGNE_SYSTEME.formatted(contexte))
                 .user(decrireProfil(profil))
                 .call()
-                .entity(RecoForme.class);   // <-- structured output : Claude rempli le record typé
+                // On passe NOTRE converter (avec cleaner de fences) au lieu de .entity(RecoForme.class).
+                // Mode "prompt" volontaire : le structured output NATIF d'Anthropic refuse le schema de
+                // RecoForme (l'enum Forme, reutilisee, devient une reference $defs qu'Anthropic ne
+                // resout pas). Le converter injecte le schema dans le prompt et nettoie la reponse.
+                .entity(recoConverter);
 
         return new Recommandation(reco, articles);
     }

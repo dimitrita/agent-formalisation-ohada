@@ -55,6 +55,43 @@ d'architecture. Angle métier/domaine. Matière : `APPRENTISSAGES.md` §2 + §3 
 `ohada_core` transverse + collections pays (`cm_procedures`). Comment ajouter un pays sans toucher au
 reste. Angle archi/scalabilité. Matière : `APPRENTISSAGES.md` §6.
 
+### ⭐ n°6 — « Votre RAG cherche mal parce que la question de l'utilisateur n'est PAS la requête »
+**Angle** : la *query construction* — étape invisible et décisive, où le **métier** entre dans la
+mécanique. On ne cherche pas avec la question brute de l'utilisateur : on **fabrique** la requête à partir
+du contexte (client, dossier, montant…) et de l'**objectif** de la tâche. Message : c'est un principe
+**universel**, pas un truc juridique.
+
+**Format = 3 cas CROSS-MÉTIERS (secteurs différents) + le cas OHADA en PREUVE vécue.**
+Les 3 génériques posent le principe (le lecteur RH / banque / e-commerce se reconnaît) ; le cas OHADA
+prouve « je l'ai fait pour de vrai, avec du code et des chiffres ». Chaque cas = 1 slide : *question brute
+pauvre* → *requête construite riche* → *ce que ça change*.
+
+- **Cas A — Support / SAV e-commerce.** Question brute : « ma commande est en retard ». Requête construite :
+  + `délai livraison, politique de retard, remboursement, transporteur` + orientée par le **statut client**
+  (VIP → conditions spéciales). Sans ça : on ramène la FAQ générique, pas la règle applicable à CE client.
+- **Cas B — RH interne.** Question brute : « combien de congés il me reste ? ». Requête construite :
+  + `solde congés payés, RTT, ancienneté, convention collective` + filtrée par **pays/contrat** du salarié.
+  Montre qu'un même intitulé donne des réponses différentes selon le contexte injecté.
+- **Cas C — Banque / conformité (climax).** Question brute : « ce virement est-il autorisé ? ». Requête
+  construite : + `plafond, pays destinataire, KYC, sanctions, seuil de déclaration` + orientée par le
+  **montant** (gros montant → aimant vers les règles anti-blanchiment). Ici l'**objectif** (autoriser vs
+  contrôler) réoriente la recherche → l'exemple le plus « waouh » pour un décideur.
+- **Cas preuve — OHADA (le nôtre).** Le seul avec code réel (`construireRequete`) + articles réellement
+  remontés (art. 5 « associé unique »). Vocabulaire **littéral** de la loi (pas les sigles, §9), branche
+  selon le nb d'associés. Crédibilité : les 3 cas posent le principe, celui-ci le matérialise.
+
+**Message clé (décideurs)** : la pertinence d'un RAG se joue **avant** le LLM et **avant** le reranking —
+dans la façon dont on **traduit un besoin métier en recherche**. Mauvaise traduction = bons outils, mauvais
+résultats. C'est un **choix de domaine** (vos experts métier doivent valider la requête, pas seulement les
+devs), pas un réglage technique → exactement le pont technico-fonctionnel.
+
+**Attention rédaction** (cf CLAUDE.md) : cadrer chaque cas par sa **conséquence business**, pas par la
+mécanique. Analogie fil rouge = l'**aimant** (la requête attire les bons documents) / le **filet** (large au
+retrieval, resserré au rerank). Cas A/B/C = illustratifs (inventés mais réalistes, à assumer comme tels) ;
+cas OHADA = **chiffres/requête RÉELS** (générer via `construireRequete` avant d'écrire).
+
+**Matière** : `APPRENTISSAGES.md` §10 + `FormeJuridiqueService.construireRequete` + §9 (vocabulaire littéral).
+
 ---
 
 ## Prochaine étape

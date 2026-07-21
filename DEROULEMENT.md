@@ -267,6 +267,25 @@ premier vrai nœud « agent » : il porte le contrat de citation et conditionne 
   concepts qui départagent les formes (responsabilité, capital, apports).
 - 🏗️ `./mvnw -DskipTests compile` = **exit 0**. ⏳ À tester : `POST /forme/recommander` sur 2-3 profils.
 
+#### Fix runtime structured output (T1.1) ✅ testé 200
+
+Le 1er `POST /forme/recommander` plantait (HTTP 500). Deux bugs empilés, corrigés :
+
+- 💡 **Bug 1 — fences Markdown.** `.entity(RecoForme.class)` attend du JSON pur, mais Claude enrobe sa
+  réponse en ` ```json … ``` ` → Jackson bute sur le backtick (`StreamReadException: Unexpected character '`'`).
+- 💡 **Fausse piste — structured output natif.** Testé `useProviderStructuredOutput()` (schéma en contrainte
+  API, pas en prompt) : Anthropic **refuse** le schéma de `RecoForme` car l'enum `Forme` réutilisée devient
+  une référence `$defs/Forme` non résolue (`Invalid schema: Reference to non-existent definition`). Le natif
+  d'Anthropic ne gère pas les `$ref/$defs` → inutilisable pour ce type. Leçon : type riche + provider ≠ OpenAI
+  ⇒ mode prompt d'abord.
+- 🏗️ **Correction retenue :** `BeanOutputConverter<RecoForme>` construit à la main avec un
+  `MarkdownCodeBlockCleaner` (retire les fences avant parsing), passé à `.entity(recoConverter)` (le converter
+  est un `FormatProvider` → injecte quand même le schéma dans le prompt). API vérifiée via **context7**.
+- 🏗️ **Bug 2 — `max-tokens=300`** tronquait le JSON de `RecoForme` (objet riche) → parsing cassé. Monté à **1024**.
+- 🏗️ Testé bout-en-bout (app sur 8081, profil « vente vêtements, 1 associé ») : **HTTP 200**, reco `SARL_U`
+  justifiée + citations (AUSCGIE art. 5/6) + `sourcesRag`. ⚠️ Les articles remontés confirment le bug connu de
+  **désaccentuation** de l'extraction PDF (corpus) — non bloquant, déjà backloggé.
+
 ---
 
 ## Concepts clés & apprentissages

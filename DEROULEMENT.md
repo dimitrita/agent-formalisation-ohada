@@ -286,6 +286,31 @@ Le 1er `POST /forme/recommander` plantait (HTTP 500). Deux bugs empilés, corrig
   justifiée + citations (AUSCGIE art. 5/6) + `sourcesRag`. ⚠️ Les articles remontés confirment le bug connu de
   **désaccentuation** de l'extraction PDF (corpus) — non bloquant, déjà backloggé.
 
+### Tranche 2 — nettoyage corpus (fixes code ✅ / ré-ingestion ⏳ bloquée RAM)
+
+Objectif : corriger les 2 défauts d'extraction (§9) **avant** le nœud rédacteur, puis ré-ingérer.
+
+- 💡 **Diagnostic accents (test jetable, supprimé).** Comparé PDFBox brut vs lecteur Spring AI sur
+  AUSCGIE : **identiques**, `FFFD=0`, mais **1302 « é » sur 922k caractères** → les accents sont
+  **absents de la couche texte du PDF source**, pas cassés à l'extraction. **Irrécupérables** sans
+  ré-accentuation externe (risqué sur du droit) → on ne les invente pas. Remède au volet *recherche* =
+  rendre le lexical insensible aux accents (`unaccent`), à faire plus tard.
+- 🏗️ **Fix défaut 2 (collision, GRAVE) — `OhadaCoreIngestionController`.** Regex `(\d+)` → `(\d+(?:-\d+)?)`
+  (capture le suffixe « 311-1 ») ; `ArticleBrut.numero` et la clé de dédup passent de `int` à `String` →
+  « 311 » et « 311-1 » deviennent **deux refs distinctes**, le vrai art. 311 n'est plus écrasé.
+- 🏗️ **Fix défaut 1 (espaces).** Normalisation `replaceAll("\\s+"," ")` sur le contenu d'article
+  (citation lisible + meilleure tokenisation lexicale).
+- 🏗️ `./mvnw compile` = **exit 0**. Diagnostic aligné (numéros en `String`, `numero_max` sur la base).
+- ⚠️ **Ré-ingestion NON terminée — mur mémoire.** L'embedding CPU de ~1200 chunks (bge-m3) fait
+  **crasher l'app** sous pression RAM (≈0,6 Go libre / 15,8 Go : Chrome + IDE + JVM saturent). Plusieurs
+  tentatives tuées/timeout. **État base laissé : AUSCGIE vidé, AUDCG=307 (vieux code).** ❌ Le corpus
+  n'est PAS utilisable en l'état.
+- ✋ **À FAIRE (utilisateur), RAM libérée** (fermer Chrome/onglets/IDE superflus) :
+  1. `./mvnw spring-boot:run` (recharge le modèle local, pas de re-téléchargement) ;
+  2. `POST /rag/ingest/auscgie` puis `POST /rag/ingest/audcg` (idempotents) ;
+  3. `GET /rag/count-db` (AUSCGIE devrait dépasser 906, suffixes désormais distincts) ;
+  4. vérif ciblée : l'art. 311 (capital SARL librement fixé) doit exister **distinct** de 311-1.
+
 ---
 
 ## Concepts clés & apprentissages

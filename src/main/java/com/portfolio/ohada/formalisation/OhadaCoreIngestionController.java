@@ -51,8 +51,10 @@ public class OhadaCoreIngestionController {
 
     // Motif de detection d'un debut d'article OHADA. Partage (DRY) entre decoupe et diagnostic.
     //   (?i) casse ignoree, (?m) ^ = debut de ligne, (?:article|art\.) le mot ou l'abreviation,
-    //   \s+(\d+) le numero capture en groupe 1.
-    private static final Pattern DEBUT_ARTICLE = Pattern.compile("(?im)^\\s*(?:article|art\\.)\\s+(\\d+)");
+    //   (\d+(?:-\d+)?) le numero capture en groupe 1, SUFFIXE COMPRIS (ex. "311-1", "853-1").
+    // Le (?:-\d+)? est le fix du defaut 2 (§9) : sans lui, "Article 311-1" capturait "311" et la
+    // deduplication ecrasait le vrai art. 311. Le suffixe fait de "311-1" une ref DISTINCTE.
+    private static final Pattern DEBUT_ARTICLE = Pattern.compile("(?im)^\\s*(?:article|art\\.)\\s+(\\d+(?:-\\d+)?)");
 
     public OhadaCoreIngestionController(VectorStore vectorStore, JdbcTemplate jdbcTemplate,
             @Value("${spring.ai.vectorstore.pgvector.table-name}") String tableName) {
@@ -120,10 +122,10 @@ public class OhadaCoreIngestionController {
         // On rejoue le regex, mais on ne garde QUE (numero d'article, longueur du chunk).
         Matcher m = DEBUT_ARTICLE.matcher(texte);
         List<Integer> debuts = new ArrayList<>();
-        List<Integer> numeros = new ArrayList<>();
+        List<String> numeros = new ArrayList<>();   // String : suffixe conserve ("311-1")
         while (m.find()) {
             debuts.add(m.start());
-            numeros.add(Integer.parseInt(m.group(1)));
+            numeros.add(m.group(1));
         }
 
         // Longueur de chaque chunk = distance jusqu'au debut suivant.
@@ -134,7 +136,7 @@ public class OhadaCoreIngestionController {
         }
 
         // Combien de numeros distincts ? Combien apparaissent plusieurs fois (= doublons TOC) ?
-        Map<Integer, Long> occurrences = numeros.stream()
+        Map<String, Long> occurrences = numeros.stream()
                 .collect(Collectors.groupingBy(n -> n, Collectors.counting()));
         long distincts = occurrences.size();
         long numerosEnDouble = occurrences.values().stream().filter(c -> c > 1).count();
@@ -143,17 +145,22 @@ public class OhadaCoreIngestionController {
         long chunksCourts = longueurs.stream().filter(l -> l < 120).count();
 
         // Quelques exemples de numeros dupliques (pour inspection).
-        List<Integer> exemplesDoublons = occurrences.entrySet().stream()
+        List<String> exemplesDoublons = occurrences.entrySet().stream()
                 .filter(e -> e.getValue() > 1)
                 .map(Map.Entry::getKey)
                 .sorted()
                 .limit(10)
                 .toList();
 
+        // numero_max = plus grand numero de BASE (avant le suffixe "-N"), pour rester informatif.
+        int numeroMax = numeros.stream()
+                .mapToInt(n -> Integer.parseInt(n.split("-")[0]))
+                .max().orElse(0);
+
         Map<String, Object> rapport = new LinkedHashMap<>();
         rapport.put("total_matches", numeros.size());
         rapport.put("numeros_distincts", distincts);
-        rapport.put("numero_max", numeros.stream().mapToInt(Integer::intValue).max().orElse(0));
+        rapport.put("numero_max", numeroMax);
         rapport.put("numeros_apparaissant_plusieurs_fois", numerosEnDouble);
         rapport.put("chunks_courts_moins_120_car", chunksCourts);
         rapport.put("exemples_numeros_dupliques", exemplesDoublons);
@@ -191,7 +198,7 @@ public class OhadaCoreIngestionController {
      * Un debut d'article repere dans le texte, AVANT deduplication.
      * Le sommaire du PDF genere de faux debuts (le meme numero apparait 2 fois : sommaire + vrai article).
      */
-    private record ArticleBrut(int numero, String contenu) {}
+    private record ArticleBrut(String numero, String contenu) {}
 
     /**
      * Decoupe le texte complet en un Document par article, en 3 etapes :
@@ -206,16 +213,19 @@ public class OhadaCoreIngestionController {
         // 1. REPERER : meme motif que le diagnostic (constante partagee DEBUT_ARTICLE).
         Matcher m = DEBUT_ARTICLE.matcher(texte);
         List<Integer> debuts = new ArrayList<>();
-        List<Integer> numeros = new ArrayList<>();
+        List<String> numeros = new ArrayList<>();   // String : garde le suffixe ("311-1"), cf defaut 2
         while (m.find()) {
             debuts.add(m.start());
-            numeros.add(Integer.parseInt(m.group(1)));
+            numeros.add(m.group(1));
         }
 
         List<ArticleBrut> bruts = new ArrayList<>();
         for (int i = 0; i < debuts.size(); i++) {
             int fin = (i + 1 < debuts.size()) ? debuts.get(i + 1) : texte.length();
-            String contenu = texte.substring(debuts.get(i), fin).trim();
+            // Fix defaut 1 (espaces) : on ecrase toute suite d'espaces/retours-ligne par UN espace.
+            // Le texte PDF est stocke avec des espaces irreguliers ("d'une   societe") -> illisible et
+            // mal tokenise par le full-text. Un chunk = un article a plat, proprement espace.
+            String contenu = texte.substring(debuts.get(i), fin).replaceAll("\\s+", " ").trim();
             bruts.add(new ArticleBrut(numeros.get(i), contenu));
         }
 
@@ -238,7 +248,8 @@ public class OhadaCoreIngestionController {
      * de sommaire (courte) qui porte le meme numero.
      */
     private Collection<ArticleBrut> deduplique(List<ArticleBrut> bruts) {
-        Map<Integer, ArticleBrut> parNumero = new LinkedHashMap<>();
+        // Cle String (et non int) : "311" et "311-1" sont deux cles DISTINCTES -> plus de collision.
+        Map<String, ArticleBrut> parNumero = new LinkedHashMap<>();
         for (ArticleBrut a : bruts) {
             ArticleBrut retenu = parNumero.get(a.numero());
             // Premier vu, ou plus long que l'actuel -> on (re)tient celui-la. Le sommaire (court) perd.
